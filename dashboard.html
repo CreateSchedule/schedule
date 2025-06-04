@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard com Banco de Dados Local</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f9f9f9; }
+    h2 { color: #333; }
+    .container { display: flex; flex-wrap: wrap; gap: 20px; }
+    .section { background-color: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 15px; flex: 1 1 30%; min-width: 300px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f0f0f0; }
+    input, select { width: 100%; padding: 6px; margin-top: 4px; }
+    button { margin-top: 10px; padding: 8px 12px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+    canvas { max-width: 100%; }
+    @media (max-width: 768px) {
+      .container { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Dashboard com Banco de Dados Local</h2>
+  <div class="container">
+    <div class="section">
+      <h3>Clientes Ativos</h3>
+      <input type="text" id="nomeAtivo" placeholder="Nome">
+      <input type="text" id="projetoAtivo" placeholder="Projeto">
+      <input type="text" id="statusAtivo" placeholder="Status">
+      <button onclick="addAtivo()">Adicionar</button>
+      <table id="ativosTable"><thead><tr><th>Nome</th><th>Projeto</th><th>Status</th><th>Ação</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="section">
+      <h3>Clientes Potenciais</h3>
+      <input type="text" id="nomePotencial" placeholder="Nome">
+      <input type="text" id="interessePotencial" placeholder="Interesse">
+      <input type="text" id="origemPotencial" placeholder="Origem">
+      <button onclick="addPotencial()">Adicionar</button>
+      <table id="potenciaisTable"><thead><tr><th>Nome</th><th>Interesse</th><th>Origem</th><th>Ação</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="section">
+      <h3>Lembretes da Semana</h3>
+      <input type="text" id="dia" placeholder="Dia da Semana">
+      <input type="text" id="tarefa" placeholder="Tarefa">
+      <select id="status">
+        <option value="A Fazer">A Fazer</option>
+        <option value="Em Progresso">Em Progresso</option>
+        <option value="Concluído">Concluído</option>
+      </select>
+      <button onclick="addLembrete()">Adicionar</button>
+      <table id="lembretesTable"><thead><tr><th>Dia</th><th>Tarefa</th><th>Status</th><th>Ação</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Gráfico de Tarefas por Status</h3>
+    <canvas id="taskChart"></canvas>
+  </div>
+
+  <script>
+    const db = JSON.parse(localStorage.getItem('db')) || { ativos: [], potenciais: [], lembretes: [] };
+
+    function saveData() {
+      localStorage.setItem('db', JSON.stringify(db));
+    }
+
+    function updateTable(id, data, fields, type) {
+      const tbody = document.getElementById(id).getElementsByTagName('tbody')[0];
+      tbody.innerHTML = '';
+      data.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        fields.forEach(f => {
+          const td = document.createElement('td');
+          td.textContent = row[f];
+          tr.appendChild(td);
+        });
+        const tdAction = document.createElement('td');
+        tdAction.innerHTML = `<button onclick="deleteItem('${type}', ${index})">Excluir</button>`;
+        tr.appendChild(tdAction);
+        tbody.appendChild(tr);
+      });
+    }
+
+    function deleteItem(type, index) {
+      db[type].splice(index, 1);
+      saveData();
+      render();
+    }
+
+    function addAtivo() {
+      const nome = document.getElementById('nomeAtivo').value;
+      const projeto = document.getElementById('projetoAtivo').value;
+      const status = document.getElementById('statusAtivo').value;
+      db.ativos.push({ nome, projeto, status });
+      saveData();
+      render();
+    }
+
+    function addPotencial() {
+      const nome = document.getElementById('nomePotencial').value;
+      const interesse = document.getElementById('interessePotencial').value;
+      const origem = document.getElementById('origemPotencial').value;
+      db.potenciais.push({ nome, interesse, origem });
+      saveData();
+      render();
+    }
+
+    function addLembrete() {
+      const dia = document.getElementById('dia').value;
+      const tarefa = document.getElementById('tarefa').value;
+      const status = document.getElementById('status').value;
+      db.lembretes.push({ dia, tarefa, status });
+      saveData();
+      render();
+    }
+
+    let chart;
+    function updateChart() {
+      const statusCount = db.lembretes.reduce((acc, item) => {
+        acc[item.status] = (acc[item.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      const data = {
+        labels: Object.keys(statusCount),
+        datasets: [{
+          label: 'Tarefas',
+          data: Object.values(statusCount),
+          backgroundColor: ['#f39c12', '#3498db', '#2ecc71']
+        }]
+      };
+
+      if (chart) chart.destroy();
+
+      const ctx = document.getElementById('taskChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data,
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function render() {
+      updateTable('ativosTable', db.ativos, ['nome', 'projeto', 'status'], 'ativos');
+      updateTable('potenciaisTable', db.potenciais, ['nome', 'interesse', 'origem'], 'potenciais');
+      updateTable('lembretesTable', db.lembretes, ['dia', 'tarefa', 'status'], 'lembretes');
+      updateChart();
+    }
+
+    render();
+  </script>
+</body>
+</html>
